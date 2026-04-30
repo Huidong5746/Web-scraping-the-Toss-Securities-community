@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>토스증권 댓글 분석</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, "Noto Sans KR", sans-serif;
+      color: #1f2937;
+      background: #f5f7fb;
+    }
+    header {
+      background: #0f172a;
+      color: white;
+      padding: 28px 32px;
+    }
+    main {
+      width: min(1120px, calc(100% - 32px));
+      margin: 24px auto 48px;
+    }
+    h1, h2, h3 { margin: 0; }
+    h1 { font-size: 28px; }
+    h2 { font-size: 20px; margin-bottom: 14px; }
+    h3 { font-size: 16px; margin-bottom: 10px; }
+    .subtitle { margin: 8px 0 0; color: #cbd5e1; }
+    .search-panel, .section, .summary-item {
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 20px;
+    }
+    .search-panel { margin-bottom: 20px; }
+    form {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: end;
+    }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 700;
+    }
+    input {
+      width: 100%;
+      min-height: 44px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      padding: 0 12px;
+      font-size: 16px;
+      background: white;
+    }
+    button {
+      min-height: 44px;
+      border: 0;
+      border-radius: 6px;
+      padding: 0 18px;
+      font-weight: 700;
+      color: white;
+      background: #2563eb;
+      cursor: pointer;
+    }
+    .error {
+      margin-bottom: 20px;
+      padding: 14px 16px;
+      border-radius: 8px;
+      color: #991b1b;
+      background: #fee2e2;
+      border: 1px solid #fecaca;
+    }
+    .notice {
+      margin-bottom: 12px;
+      padding: 14px 16px;
+      border-radius: 8px;
+      color: #92400e;
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+    }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .summary-item strong {
+      display: block;
+      font-size: 24px;
+      margin-top: 6px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+    .section { margin-bottom: 16px; }
+    ol, ul { margin: 0; padding-left: 22px; }
+    li { margin: 8px 0; line-height: 1.5; }
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .meta div {
+      padding: 12px;
+      border-radius: 6px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+    }
+    code {
+      word-break: break-all;
+      color: #334155;
+    }
+    .stage-badge {
+      display: inline-block;
+      min-width: 58px;
+      margin-right: 8px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      color: white;
+      font-size: 12px;
+      font-weight: 700;
+      text-align: center;
+    }
+    .stage-original { background: #475569; }
+    .stage-preprocessed { background: #0f766e; }
+    .stage-augmented { background: #7c3aed; }
+    .source-text {
+      display: block;
+      margin: 4px 0 0 70px;
+      color: #64748b;
+      font-size: 13px;
+    }
+    @media (max-width: 760px) {
+      form, .summary, .grid, .meta {
+        grid-template-columns: 1fr;
+      }
+      header { padding: 22px 16px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>토스증권 댓글 분석</h1>
+    <p class="subtitle">입력한 회사명을 기준으로 실시간 수집, 전처리, 결과 출력을 수행합니다.</p>
+  </header>
+
+  <main>
+    <section class="search-panel">
+      <form method="post">
+        {% csrf_token %}
+        <div>
+          {{ form.company_name.label_tag }}
+          {{ form.company_name }}
+          {{ form.company_name.errors }}
+        </div>
+        <button type="submit">수집 실행</button>
+      </form>
+    </section>
+
+    {% if error_message %}
+      <div class="error">{{ error_message }}</div>
+    {% endif %}
+
+    {% if result %}
+      <section class="summary">
+        <div class="summary-item">입력 회사명<strong>{{ result.requested_company_name }}</strong></div>
+        <div class="summary-item">매칭 종목명<strong>{{ result.official_stock_name }}</strong></div>
+        <div class="summary-item">원본 댓글<strong>{{ result.original_comments|length }}</strong></div>
+        <div class="summary-item">통합 결과<strong>{{ result.unified_dataset|length }}</strong></div>
+      </section>
+
+      <section class="section">
+        <h2>처리 정보</h2>
+        <div class="meta">
+          <div>종목 코드<br><code>{{ result.stock_code }}</code></div>
+          <div>요청 시각<br><code>{{ result.requested_at|date:"Y-m-d H:i:s" }}</code></div>
+          <div>상세 페이지<br><code>{{ result.detail_url }}</code></div>
+          <div>커뮤니티 페이지<br><code>{{ result.community_url }}</code></div>
+        </div>
+      </section>
+
+      {% for notice in result.notices %}
+        <div class="notice">{{ notice }}</div>
+      {% endfor %}
+
+      <div class="grid">
+        <section class="section">
+          <h2>수집 단계</h2>
+          <ol>
+            {% for step in result.collection_steps %}
+              <li>{{ step }}</li>
+            {% endfor %}
+          </ol>
+        </section>
+
+        <section class="section">
+          <h2>전처리 단계</h2>
+          <ol>
+            {% for step in result.preprocess_steps %}
+              <li>{{ step }}</li>
+            {% endfor %}
+          </ol>
+        </section>
+      </div>
+
+      <section class="section">
+        <h2>증강 단계</h2>
+        <div class="meta">
+          <div>증강 API<br><code>{{ result.augmentation_provider }}</code></div>
+          <div>모델<br><code>{{ result.augmentation_model }}</code></div>
+        </div>
+        <ol>
+          {% for step in result.augmentation_steps %}
+            <li>{{ step }}</li>
+          {% endfor %}
+        </ol>
+      </section>
+
+      <section class="section">
+        <h2>전체 댓글 요약 및 인사이트</h2>
+        <p>{{ result.summary }}</p>
+
+        <div class="grid">
+          <div>
+            <h3>핵심 키워드</h3>
+            <ul>
+              {% for keyword in result.summary_keywords %}
+                <li>{{ keyword }}</li>
+              {% empty %}
+                <li>추출된 키워드가 없습니다.</li>
+              {% endfor %}
+            </ul>
+          </div>
+
+          <div>
+            <h3>의미 있는 정보</h3>
+            <ul>
+              {% for insight in result.summary_insights %}
+                <li>{{ insight }}</li>
+              {% empty %}
+                <li>도출된 인사이트가 없습니다.</li>
+              {% endfor %}
+            </ul>
+          </div>
+        </div>
+
+        <h3>주의사항</h3>
+        <ul>
+          {% for warning in result.summary_warnings %}
+            <li>{{ warning }}</li>
+          {% empty %}
+            <li>별도 주의사항이 없습니다.</li>
+          {% endfor %}
+        </ul>
+
+        <h3>요약 단계</h3>
+        <ol>
+          {% for step in result.summary_steps %}
+            <li>{{ step }}</li>
+          {% endfor %}
+        </ol>
+      </section>
+
+      <div class="grid">
+        <section class="section">
+          <h2>원본 댓글</h2>
+          <ol>
+            {% for comment in result.original_comments %}
+              <li>{{ comment }}</li>
+            {% empty %}
+              <li>수집된 댓글이 없습니다.</li>
+            {% endfor %}
+          </ol>
+        </section>
+
+        <section class="section">
+          <h2>정제 댓글</h2>
+          <ol>
+            {% for comment in result.cleaned_comments %}
+              <li>{{ comment }}</li>
+            {% empty %}
+              <li>정제 후 남은 댓글이 없습니다.</li>
+            {% endfor %}
+          </ol>
+        </section>
+      </div>
+
+      <section class="section">
+        <h2>GMS LLM API 증강 결과</h2>
+        <ol>
+          {% for item in result.augmented_pairs %}
+            <li>
+              <strong>정제:</strong> {{ item.source }}<br>
+              <strong>증강:</strong> {{ item.augmented }}
+            </li>
+          {% empty %}
+            <li>생성된 증강 댓글이 없습니다.</li>
+          {% endfor %}
+        </ol>
+      </section>
+
+      <div class="grid">
+        <section class="section">
+          <h2>LLM 제거 댓글</h2>
+          <ol>
+            {% for comment in result.inappropriate_comments %}
+              <li>{{ comment }}</li>
+            {% empty %}
+              <li>LLM으로 제거된 댓글이 없습니다.</li>
+            {% endfor %}
+          </ol>
+        </section>
+
+        <section class="section">
+          <h2>규칙 기반 제거 내역</h2>
+          <ol>
+            {% for item in result.removed_comments %}
+              <li>[{{ item.reason }}] {{ item.original }}</li>
+            {% empty %}
+              <li>규칙 기반으로 제거된 댓글이 없습니다.</li>
+            {% endfor %}
+          </ol>
+        </section>
+      </div>
+
+      <section class="section">
+        <h2>통합 결과 집합</h2>
+        <p>원본, 전처리, 증강 데이터는 <code>augmentation_ready_data.unified_dataset</code>에 하나의 리스트로 통합되며, 각 항목은 <code>stage</code>와 <code>stage_label</code>로 구분됩니다.</p>
+        <ol>
+          {% for item in result.unified_dataset %}
+            <li>
+              <span class="stage-badge stage-{{ item.stage }}">{{ item.stage_label }}</span>
+              {{ item.text }}
+              {% if item.source_text %}
+                <span class="source-text">원 전처리 댓글: {{ item.source_text }}</span>
+              {% endif %}
+            </li>
+          {% empty %}
+            <li>통합 결과가 없습니다.</li>
+          {% endfor %}
+        </ol>
+      </section>
+    {% endif %}
+  </main>
+</body>
+</html>
